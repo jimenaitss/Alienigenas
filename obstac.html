@@ -1,0 +1,440 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Galactic Defender: Alien Invasion</title>
+<style>
+    body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: Arial, sans-serif;
+    }
+
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+        z-index: 1;
+    }
+
+    #background {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0;
+    }
+
+    #gameOverMessage {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+        display: none;
+        color: red;
+        font-size: 62px;
+        font-weight: bold;
+        text-align: center;
+    }
+
+    #retryButton {
+        position: absolute;
+        top: 60%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2;
+        display: none;
+        padding: 10px 20px;
+        font-size: 20px;
+        background-color: #101DA1;
+        color: white;
+        border: none;
+        cursor: pointer;
+        border-radius: 5px;
+    }
+
+    #retryButton:hover {
+        background-color: #8210A1;
+    }
+
+    #startScreen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: url('panfo.jpg') center/cover no-repeat;
+        z-index: 4;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        color: red;
+    }
+
+    #startScreen h1 {
+        font-size: 64px;
+        margin-bottom: 50px;
+    }
+
+    .difficultyButton, #startButton {
+        padding: 15px 30px;
+        font-size: 20px;
+        margin: 10px;
+        cursor: pointer;
+        background-color: #280796;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        transition: background-color 0.3s;
+    }
+
+    .difficultyButton:hover, #startButton:hover {
+        background-color: #8210A1;
+    }
+
+    .difficultyButton.active {
+        background-color: #E429E4;
+    }
+
+    #startButton {
+        background-color: #DF292E;
+    }
+
+    #startButton:hover {
+        background-color: #E7832A;
+    }
+
+    #startButton.active {
+        background-color: #E7832A;
+    }
+
+    #livesContainer {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        z-index: 3;
+        display: flex;
+    }
+
+    .life {
+        width: 50px;
+        height: 50px;
+        margin-right: 10px;
+    }
+</style>
+</head>
+<body>
+<div id="startScreen">
+    <h1>Galactic Defender: Alien Invasion</h1>
+    <button class="difficultyButton" id="easyButton" onclick="selectDifficulty('easy')">Fácil</button>
+    <button class="difficultyButton" id="mediumButton" onclick="selectDifficulty('medium')">Medio</button>
+    <button class="difficultyButton" id="hardButton" onclick="selectDifficulty('hard')">Difícil</button>
+    <button id="startButton" onclick="startGame()">Comenzar</button>
+</div>
+
+<img id="background" src="planetas.jpg" alt="Fondo de pantalla">
+<canvas id="gameCanvas"></canvas>
+<div id="gameOverMessage">¡Game Over!<br>Enemigos eliminados: <span id="enemiesDestroyed">0</span></div>
+<button id="retryButton" onclick="restartGame()">Reintentar</button>
+
+<!-- Lives container -->
+<div id="livesContainer">
+    <img src="al.png" class="life" id="life1">
+    <img src="al.png" class="life" id="life2">
+    <img src="al.png" class="life" id="life3">
+</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    let gameRunning = false;
+    let lives = 3;
+
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    const playerImg = new Image();
+    playerImg.src = 'nave.png';
+
+    const enemyImg = new Image();
+    enemyImg.src = 'al.png';
+
+    const starImg = new Image();
+    starImg.src = 'estrella.png';
+
+    const player = {
+        x: canvas.width / 2,
+        y: canvas.height - 100,
+        width: 100,
+        height: 100,
+        speed: 12
+    };
+
+    const bullets = [];
+    const enemies = [];
+    const stars = [];
+    let enemiesDestroyed = 0;
+    let enemySpeedFactor = 1;
+    let enemySpawnRate = 2000;
+    let starSpeedFactor = 1;
+    let starSpawnRate = 500;
+
+    const keys = {};
+
+    document.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+        if (e.code === 'Space' && gameRunning) {
+            fireBullet();
+            playBulletSound();
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        keys[e.code] = false;
+    });
+
+    function createBullet(x, y, speedY) {
+        return { x, y, speedY };
+    }
+
+    function drawPlayer() {
+        ctx.drawImage(playerImg, player.x, player.y, player.width, player.height);
+    }
+
+    function drawBullets() {
+        bullets.forEach(bullet => {
+            ctx.fillStyle = 'yellow';
+            ctx.fillRect(bullet.x, bullet.y, 10, 20);
+        });
+    }
+
+    function drawEnemies() {
+        enemies.forEach(enemy => {
+            ctx.drawImage(enemyImg, enemy.x, enemy.y, enemy.width, enemy.height);
+        });
+    }
+
+    function drawStars() {
+        stars.forEach(star => {
+            ctx.drawImage(starImg, star.x, star.y, star.width, star.height);
+        });
+    }
+
+    function movePlayer() {
+        if (keys['ArrowLeft'] && player.x > 0) {
+            player.x -= player.speed;
+        }
+        if (keys['ArrowRight'] && player.x < canvas.width - player.width) {
+            player.x += player.speed;
+        }
+    }
+
+    function moveBullets() {
+        bullets.forEach(bullet => {
+            bullet.y -= bullet.speedY;
+        });
+    }
+
+    function moveEnemies() {
+        enemies.forEach((enemy, index) => {
+            enemy.y += enemy.speedY * enemySpeedFactor;
+            if (enemy.y > canvas.height) {
+                enemies.splice(index, 1);
+                loseLife();
+            }
+        });
+    }
+
+    function moveStars() {
+        stars.forEach((star, index) => {
+            star.y += star.speedY * starSpeedFactor;
+            if (star.y > canvas.height) {
+                stars.splice(index, 1);
+            }
+        });
+    }
+
+    function fireBullet() {
+        bullets.push(createBullet(player.x + player.width / 2 - 5, player.y, 10));
+    }
+
+    function detectCollisions() {
+        bullets.forEach((bullet, bulletIndex) => {
+            enemies.forEach((enemy, enemyIndex) => {
+                if (
+                    bullet.x < enemy.x + enemy.width &&
+                    bullet.x + 10 > enemy.x &&
+                    bullet.y < enemy.y + enemy.height &&
+                    bullet.y + 20 > enemy.y
+                ) {
+                    bullets.splice(bulletIndex, 1);
+                    enemies.splice(enemyIndex, 1);
+                    enemiesDestroyed++;
+                    playExplosionSound();
+                }
+            });
+        });
+    }
+
+    function gameLoop() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        movePlayer();
+        drawPlayer();
+
+        moveBullets();
+        drawBullets();
+
+        moveEnemies();
+        drawEnemies();
+
+        moveStars();
+        drawStars();
+
+        detectCollisions();
+
+        if (lives > 0) {
+            requestAnimationFrame(gameLoop);
+        }
+    }
+
+    function endGame() {
+        gameRunning = false;
+        clearInterval(enemySpawnInterval);
+        clearInterval(starSpawnInterval);
+        document.getElementById('enemiesDestroyed').innerText = enemiesDestroyed;
+        document.getElementById('gameOverMessage').style.display = 'block';
+        document.getElementById('retryButton').style.display = 'block';
+    }
+
+    function restartGame() {
+        missedEnemies = 0;
+        enemiesDestroyed = 0;
+        bullets.length = 0;
+        enemies.length = 0;
+        stars.length = 0;
+        document.getElementById('gameOverMessage').style.display = 'none';
+        document.getElementById('retryButton').style.display = 'none';
+        document.getElementById('startScreen').style.display = 'flex';
+        resetDifficultyButtons();
+        resetLives();
+        gameRunning = false;
+    }
+
+    function resetDifficultyButtons() {
+        document.querySelectorAll('.difficultyButton').forEach(button => {
+            button.classList.remove('active');
+        });
+    }
+
+    function selectDifficulty(difficulty) {
+        resetDifficultyButtons();
+        document.getElementById(difficulty + 'Button').classList.add('active');
+        switch (difficulty) {
+            case 'easy':
+                enemySpeedFactor = 1;
+                enemySpawnRate = 2000;
+                starSpeedFactor = 1;
+                starSpawnRate = 500;
+                break;
+            case 'medium':
+                enemySpeedFactor = 1.5;
+                enemySpawnRate = 1500;
+                starSpeedFactor = 1.5;
+                starSpawnRate = 400;
+                break;
+            case 'hard':
+                enemySpeedFactor = 2;
+                enemySpawnRate = 1000;
+                starSpeedFactor = 2;
+                starSpawnRate = 300;
+                break;
+        }
+    }
+
+    function startGame() {
+        document.getElementById('startScreen').style.display = 'none';
+        gameRunning = true;
+        startSpawning();
+        gameLoop();
+    }
+
+    let enemySpawnInterval;
+    let starSpawnInterval;
+
+    function startSpawning() {
+        enemySpawnInterval = setInterval(() => {
+            const x = Math.random() * (canvas.width - 90);
+            const speedY = 2 + Math.random() * 2;
+            enemies.push({ x, y: -50, width: 90, height: 90, speedY });
+        }, enemySpawnRate);
+
+        starSpawnInterval = setInterval(() => {
+            const x = Math.random() * canvas.width;
+            const speedY = 1 + Math.random() * 2;
+            stars.push({ x, y: -50, width: 20, height: 20, speedY });
+        }, starSpawnRate);
+    }
+
+    function loseLife() {
+        lives--;
+        document.getElementById('life' + (lives + 1)).style.display = 'none';
+        if (lives <= 0) {
+            endGame();
+        }
+    }
+
+    function resetLives() {
+        lives = 3;
+        for (let i = 1; i <= 3; i++) {
+            document.getElementById('life' + i).style.display = 'inline-block';
+        }
+    }
+
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    function playBulletSound() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = 'square';
+        oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.1);
+
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.1);
+    }
+
+    function playExplosionSound() {
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+
+        oscillator.type = 'triangle';
+        oscillator.frequency.setValueAtTime(100, audioContext.currentTime); 
+
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+
+        oscillator.start();
+        oscillator.stop(audioContext.currentTime + 0.2);
+
+        gainNode.gain.exponentialRampToValueAtTime(0.00001, audioContext.currentTime + 0.2); 
+    }
+</script>
+</body>
+</html>
